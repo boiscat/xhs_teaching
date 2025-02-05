@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>语音识别系统</title>
+    <meta charset="utf-8">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            display: flex;
+            gap: 20px;
+        }
+        .video-container {
+            flex: 1;
+            position: sticky;
+            top: 20px;
+        }
+        .result-container {
+            flex: 1;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .loading {
+            display: none;
+            color: #666;
+            margin-top: 10px;
+        }
+        .error {
+            color: red;
+            margin-top: 10px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #f5f5f5;
+            font-weight: bold;
+        }
+        tr:hover {
+            background-color: #f9f9f9;
+            cursor: pointer;
+        }
+        .time-cell {
+            width: 200px;
+            color: #666;
+            font-size: 0.9em;
+        }
+        .text-cell {
+            font-size: 1.1em;
+        }
+        .debug-info {
+            margin-top: 20px;
+            padding: 10px;
+            background: #f5f5f5;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 0.9em;
+        }
+        .active-segment {
+            background-color: #e3f2fd;
+        }
+        #videoPlayer {
+            width: 100%;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <h1>语音识别系统</h1>
+    <div class="form-group">
+        <form id="uploadForm" enctype="multipart/form-data">
+            <input type="file" name="video" accept="video/*,audio/*" required id="fileInput">
+            <button type="submit">上传并识别</button>
+        </form>
+        <div id="loading" class="loading">处理中，请稍候...</div>
+        <div id="error" class="error"></div>
+    </div>
+    
+    <div class="container">
+        <div class="video-container">
+            <video id="videoPlayer" controls>
+                您的浏览器不支持视频播放。
+            </video>
+        </div>
+        
+        <div class="result-container">
+            <div id="result" class="result" style="display:none;">
+                <h3>识别结果：</h3>
+                <div id="stats"></div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>时间段</th>
+                            <th>识别文本</th>
+                        </tr>
+                    </thead>
+                    <tbody id="transcriptionResults">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <div id="debug" class="debug-info"></div>
+
+    <script>
+        const videoPlayer = document.getElementById('videoPlayer');
+        let currentVideoUrl = null;
+        
+        const formatTime = (seconds) => {
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            const ms = Math.floor((seconds % 1) * 1000);
+            return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
+        };
+
+        const debugLog = (message) => {
+            console.log(message);
+            const debug = document.getElementById('debug');
+            debug.innerHTML += `<div>${message}</div>`;
+        };
+
+        // 更新视频源
+        const updateVideoSource = (file) => {
+            if (currentVideoUrl) {
+                URL.revokeObjectURL(currentVideoUrl);
+            }
+            currentVideoUrl = URL.createObjectURL(file);
+            videoPlayer.src = currentVideoUrl;
+            videoPlayer.load();
+        };
+
+        // 跳转到指定时间
+        const seekToTime = (time) => {
+            videoPlayer.currentTime = time;
+            videoPlayer.play();
+        };
+
+        // 高亮当前播放的片段
+        videoPlayer.ontimeupdate = () => {
+            const currentTime = videoPlayer.currentTime;
+            const rows = document.querySelectorAll('#transcriptionResults tr');
+            rows.forEach(row => {
+                const startTime = parseFloat(row.dataset.start);
+                const endTime = parseFloat(row.dataset.end);
+                if (currentTime >= startTime && currentTime <= endTime) {
+                    row.classList.add('active-segment');
+                } else {
+                    row.classList.remove('active-segment');
+                }
+            });
+        };
+
+        document.getElementById('fileInput').onchange = (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                debugLog(`选择的文件: ${file.name}, 大小: ${(file.size / 1024 / 1024).toFixed(2)}MB, 类型: ${file.type}`);
+                updateVideoSource(file);
+            }
+        };
+
+        document.getElementById('uploadForm').onsubmit = async (e) => {
+            e.preventDefault();
+            debugLog('表单提交开始');
+            
+            const loading = document.getElementById('loading');
+            const error = document.getElementById('error');
+            const result = document.getElementById('result');
+            const transcriptionResults = document.getElementById('transcriptionResults');
+            const stats = document.getElementById('stats');
+            
+            loading.style.display = 'block';
+            error.textContent = '';
+            result.style.display = 'none';
+            transcriptionResults.innerHTML = '';
+            stats.innerHTML = '';
+            
+            const formData = new FormData(e.target);
+            const file = formData.get('video');
+            
+            if (!file || file.size === 0) {
+                debugLog('错误：没有选择文件或文件为空');
+                error.textContent = '请选择一个文件';
+                loading.style.display = 'none';
+                return;
+            }
+
+            debugLog(`开始上传文件: ${file.name}`);
+            
+            try {
+                debugLog('发送请求到服务器...');
+                const response = await fetch('/api/process-video', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                debugLog('收到服务器响应');
+                debugLog(`响应状态: ${response.status} ${response.statusText}`);
+                
+                const data = await response.json();
+                debugLog('解析响应数据: ' + JSON.stringify(data));
+                
+                if (!response.ok) {
+                    throw new Error(data.detail || data.error || '处理失败');
+                }
+                
+                result.style.display = 'block';
+                
+                if (data.transcriptions && data.transcriptions.length > 0) {
+                    // 显示统计信息
+                    const totalDuration = data.transcriptions[data.transcriptions.length - 1].end;
+                    stats.innerHTML = `
+                        <p>文件名: ${data.filename}</p>
+                        <p>识别片段数: ${data.transcriptions.length}</p>
+                        <p>总时长: ${formatTime(totalDuration)}</p>
+                    `;
+
+                    // 显示转录结果表格
+                    data.transcriptions.forEach(trans => {
+                        const row = document.createElement('tr');
+                        row.dataset.start = trans.start;
+                        row.dataset.end = trans.end;
+                        row.innerHTML = `
+                            <td class="time-cell">${formatTime(trans.start)} - ${formatTime(trans.end)}</td>
+                            <td class="text-cell">${trans.text}</td>
+                        `;
+                        row.onclick = () => seekToTime(trans.start);
+                        transcriptionResults.appendChild(row);
+                    });
+                } else {
+                    transcriptionResults.innerHTML = '<tr><td colspan="2">未识别到任何文本</td></tr>';
+                }
+            } catch (error) {
+                debugLog('发生错误: ' + error.message);
+                console.error('错误:', error);
+                document.getElementById('error').textContent = '错误：' + error.message;
+            } finally {
+                loading.style.display = 'none';
+            }
+        };
+    </script>
+</body>
+</html> 

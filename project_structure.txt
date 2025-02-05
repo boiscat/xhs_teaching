@@ -1,0 +1,18 @@
+app/
+├── __init__.py
+├── config.py
+├── models/
+│   ├── __init__.py
+│   └── video.py
+├── routes/
+│   ├── __init__.py
+│   └── api.py
+├── services/
+│   ├── __init__.py
+│   ├── ocr_service.py
+│   └── video_service.py
+└── utils/
+    ├── __init__.py
+    └── helpers.py
+requirements.txt
+run.py 
