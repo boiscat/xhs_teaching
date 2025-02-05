@@ -1,5 +1,24 @@
-Flask>=2.3.0
-Flask-PyMongo>=2.3.0
-python-dotenv>=1.0.0
-Werkzeug>=2.3.0
-faster-whisper>=0.10.0 
+# Web Framework
+Flask==3.0.2
+flask-cors==4.0.0
+flask-pymongo==2.3.0
+
+# Audio Processing
+faster-whisper==0.10.0
+ffmpeg-python==0.2.0
+
+# Machine Learning Dependencies
+torch==2.2.0
+torchaudio==2.2.0
+numpy==1.26.4
+
+# Utilities
+python-dotenv==1.0.1
+Werkzeug==3.0.1
+requests==2.31.0
+
+# MongoDB
+pymongo==4.6.1
+
+# File Processing
+moviepy==1.0.3 
