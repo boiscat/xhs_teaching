@@ -12,6 +12,7 @@ Download the following files from [Hugging Face](https://huggingface.co/Systran/
 
 ## Step 2: Install Dependencies
 Run the following command to install the required dependencies:
+
 pip install -r requirements.txt
 
 # 3. using vscode IDE: 
